@@ -1,0 +1,49 @@
+# Every hour, take 12 snapshots of Lime's Seattle GBFS feed (one every
+# 5 minutes) and commit them to the `gbfs-data` branch, so main stays clean.
+# Start/stop: Actions tab -> "Collect Lime GBFS" -> "..." -> Disable/Enable workflow.
+# Run now: Actions tab -> "Collect Lime GBFS" -> "Run workflow".
+name: Collect Lime GBFS
+
+on:
+  schedule:
+    - cron: "7 * * * *"   # hourly at :07 UTC (GitHub may start it a few minutes late)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lime-gbfs
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Take snapshots
+        run: python gbfs/collect_gbfs.py --snapshots 12 --every 300 --out "$RUNNER_TEMP/lime_seattle"
+
+      - name: Commit to gbfs-data branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898099+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth 1 origin gbfs-data; then
+            git worktree add "$RUNNER_TEMP/data" FETCH_HEAD
+            cd "$RUNNER_TEMP/data" && git checkout -B gbfs-data
+          else
+            git worktree add --detach "$RUNNER_TEMP/data"
+            cd "$RUNNER_TEMP/data" && git checkout --orphan gbfs-data && git rm -rfq .
+            printf '# Lime Seattle GBFS snapshots\n\nWritten hourly by the "Collect Lime GBFS" workflow on main. See gbfs/README.md on main.\n' > README.md
+          fi
+          mkdir -p lime_seattle
+          cp -R "$RUNNER_TEMP/lime_seattle/." lime_seattle/
+          git add -A
+          git commit -qm "Lime GBFS snapshots $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3 4; do git push origin gbfs-data && break; sleep $((i * 10)); done
