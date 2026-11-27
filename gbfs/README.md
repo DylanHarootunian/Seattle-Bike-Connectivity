@@ -18,7 +18,9 @@ every 5 minutes, in hourly batches, and commits the results to the
 
 Actions tab -> **Collect Lime GBFS** -> `...` -> **Disable workflow** to stop,
 **Enable workflow** to resume, **Run workflow** to start a batch right away.
-GitHub's scheduler can start runs late or skip an hour now and then, so expect small gaps.
+GitHub's hourly cron is unreliable, so each run also starts the next one when it
+finishes, giving back-to-back hourly batches. To stop for good, **disable** the
+workflow (cancelling a single run also stops the chain; click Run workflow to restart).
 
 ## Load it
 
